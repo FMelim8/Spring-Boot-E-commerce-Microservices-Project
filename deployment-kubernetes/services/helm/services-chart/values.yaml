@@ -1,0 +1,460 @@
+services:
+  eureka-server:
+    image: filipem/eureka-service
+    tag: 1.1.0
+    port: 8761
+    replicas: 1
+    env:
+      SPRING_CONFIG_LOCATION: "file:/config/"
+    volumeMounts:
+      eureka-server-config:
+        path: /config/application.yaml
+        subPath: application.yaml
+    volumes:
+      eureka-server-config:
+        type: configMap
+        name: eureka-server-config
+
+  gamecatalog:
+    image: filipem/gamecatalog-service
+    tag: 1.2.0
+    port: 9094
+    replicas: 1
+    ingress: "true"
+    env:
+      SPRING_CONFIG_LOCATION: "file:/config/"
+    config:
+      - service
+    secret:
+      - database
+    volumeMounts:
+      gamecatalog-config: 
+        path: /config/application.yaml
+        subPath: application.yaml
+      logs-volume:
+        path: /logs/gamecatalog-svc
+    volumes:
+      gamecatalog-config:
+        type: configMap
+        name: gamecatalog-config
+      logs-volume:
+        type: pvc
+        name: logs
+
+  gameorder:
+    image: filipem/gameorder-service
+    tag: 1.2.0
+    port: 9095
+    replicas: 1
+    ingress: "true"
+    config:
+      - service
+    secret:
+      - database
+    env:
+      SPRING_CONFIG_LOCATION: "file:/config/"
+    volumeMounts:
+      gameorder-config:
+        path: /config/application.yaml
+        subPath: application.yaml
+      logs-volume:
+        path: /logs/gameorder-svc
+    volumes:
+      gameorder-config:
+        type: configMap
+        name: gameorder-config
+      logs-volume:
+        type: pvc
+        name: logs
+    
+  
+  keycloak-service:
+    image: filipem/keycloak-service
+    tag: 1.2.0
+    port: 8091
+    replicas: 1
+    ingress: "true"
+    config:
+      - service
+    secret:
+      - database
+    env:
+      SPRING_CONFIG_LOCATION: "file:/config/"
+    volumeMounts:
+      keycloak-service-config:
+        path: /config/application.yaml
+        subPath: application.yaml
+      logs-volume:
+        path: /logs/keycloak-svc
+    volumes:
+      keycloak-service-config:
+        type: configMap
+        name: keycloak-service-config
+      logs-volume:
+        type: pvc
+        name: logs
+  
+  keycloak:
+    image: quay.io/keycloak/keycloak
+    tag: 23.0.6
+    port: 8080
+    args:
+      - start-dev
+      - --import-realm
+    replicas: 1
+    config:
+     - keycloak
+    secret:
+      - database:
+          DATABASE_USERNAME: KC_DB_USERNAME
+          DATABASE_PASSWORD: KC_DB_PASSWORD
+
+    volumeMounts:
+      keycloak-import-config:
+        path: /opt/keycloak/data/import
+        subpath: microservices-realm.json
+      keycloak-data:
+       path: /opt/jboss/keycloak/standalone/data
+    volumes:
+      keycloak-import-config:
+        type: configMap
+        name: keycloak-import-config
+      keycloak-data:
+        type: pvc
+        name: keycloak-data
+
+  postgres:
+    image: postgres
+    tag: 15.11-alpine
+    port: 5432
+    replicas: 1
+    secret:
+      - database:
+          DATABASE_USERNAME: POSTGRES_USER
+          DATABASE_PASSWORD: POSTGRES_PASSWORD
+    volumeMounts:
+      postgres-config:
+        path: /docker-entrypoint-initdb.d
+        subpath: init.sql
+    volumes:
+      postgres-config:
+        type: configMap
+        name: postgres-config
+
+  kafka:
+    image: bitnami/kafka
+    tag: 4.0.0
+    port:
+      - kafka: 9092
+      - controller: 9093
+    replicas: 1
+    config:
+     - kafka
+    volumeMounts:
+      kafka-data:
+        path: /bitnami/kafka
+    volumes:
+      kafka-data:
+        type: pvc
+        name: kafka-data
+    
+volume:
+  logs:
+    size: 500Mi
+    keep: "true"
+  keycloak-data:
+    size: 200Mi
+  kafka-data:
+    size: 200Mi  
+
+configMap:
+  tpl:
+    keycloak-import:
+      type: json
+      template: keycloakImportFile
+  file:
+    postgres:
+      init.sql: |
+        CREATE DATABASE games;
+        CREATE DATABASE orders;
+        CREATE DATABASE users;
+        CREATE DATABASE keycloak;
+    eureka-server: 
+      application.yaml: |
+        spring:
+            application:
+                name: eureka-server
+        server:
+            port: 8761
+        eureka:
+            instance:
+                hostname: localhost
+            client:
+                register-with-eureka: false
+                fetch-registry: false
+            server:
+                renewal-percent-threshold: 0.49
+    gamecatalog: 
+      application.yaml: |
+        service:
+            name: Gamecatalog
+        server:
+            port: 9094
+            servlet:
+                context-path: /gamecatalog
+            error:
+                include-message: always
+
+        spring:
+            application:
+                name: GAME-CATALOG-SERVICE
+            datasource:
+                url: jdbc:postgresql://${DATABASE_URL}/games
+                username: ${DATABASE_USERNAME}
+                password: ${DATABASE_PASSWORD}
+            jpa:
+                hibernate:
+                    ddl-auto: update
+                show-sql: true
+                properties:
+                    hibernate:
+                        format_sql: true
+                        dialect: org.hibernate.dialect.PostgreSQLDialect
+            kafka:
+                bootstrap-servers: ${KAFKA_SERVER_ADDRESS}
+            security:
+                oauth2:
+                  resourceserver:
+                    jwt:
+                        issuer-uri: ${JWT_ISSUER_URI}
+                        jwk-set-uri: ${JWT_ISSUER_URI}/protocol/openid-connect/certs
+        eureka:
+            instance:
+                prefer-ip-address: false
+                hostname: gamecatalog
+            client:
+                fetch-registry: true
+                register-with-eureka: true
+                service-url:
+                    defaultZone: ${EUREKA_SERVER_ADDRESS}
+        jwt:
+            auth:
+                converter:
+                    resource-id: keycloak-client
+                    principal-attribute: preferred_username
+        logging:
+            level:
+                org.apache.kafka: ERROR
+        rollbar:
+            accessToken: ${ROLLBAR_TOKEN}
+    gameorder: 
+      application.yaml: |
+        service:
+            name: Gameorder
+        server:
+            error:
+                include-message: always
+            servlet:
+                context-path: /gameorder
+            port: 9095
+        spring:
+            application:
+                name: GAME-ORDER-SERVICE
+            datasource:
+                url: jdbc:postgresql://${DATABASE_URL}/orders
+                username: ${DATABASE_USERNAME}
+                password: ${DATABASE_PASSWORD}
+            jpa:
+                hibernate:
+                    ddl-auto: update
+                show-sql: true
+                properties:
+                    hibernate:
+                        format_sql: true
+                        dialect: org.hibernate.dialect.PostgreSQLDialect
+            cloud:
+                openfeign:
+                    circuitbreaker:
+                        enabled: true
+                    bulkhead:
+                        enabled: false
+                    client:
+                        config:
+                            default:
+                                connectTimeout: 10000
+                                readTimeout: 10000
+
+            kafka:
+                bootstrap-servers: ${KAFKA_SERVER_ADDRESS}
+            security:
+                oauth2:
+                    resourceserver:
+                        jwt:
+                            issuer-uri: ${JWT_ISSUER_URI}
+                            jwk-set-uri: ${JWT_ISSUER_URI}/protocol/openid-connect/certs
+
+        eureka:
+            instance:
+                prefer-ip-address: false
+                hostname: gameorder
+            client:
+                fetch-registry: true
+                register-with-eureka: true
+                service-url:
+                    defaultZone: ${EUREKA_SERVER_ADDRESS}
+
+        jwt:
+            auth:
+                converter:
+                    resource-id: keycloak-client
+                    principal-attribute: preferred_username
+
+        keycloak:
+            realm: microservices-realm
+            resource: keycloak-client
+            auth-server-url: http://keycloak:8080
+            client:
+                secret: KdzCgauJ2QR1rRGUmAQsBOeMAyCi96kP
+            service:
+                name: KEYCLOAK-SERVICE
+                basePath: /keycloakservice
+
+        gamecatalog:
+            service:
+                name: GAME-CATALOG-SERVICE
+                basePath: /gamecatalog
+
+        management:
+            endpoint:
+                health:
+                    show-details: always
+            health:
+                circuitbreakers:
+                    enabled: true
+
+        resilience4j:
+            circuitbreaker:
+                instances:
+                    DEFAULT_CIRCUITBREAKER:
+                        slidingWindowSize: 10
+                        sliding-window-type: count_based
+                        failureRateThreshold: 50
+                        waitDurationInOpenState: 3000
+                        permittedNumberOfCallsInHalfOpenState: 3
+                        minimumNumberOfCalls: 4
+                        automaticTransitionFromOpenToHalfOpenEnabled: true
+                        slow-call-rate-threshold: 50
+                        slow-call-duration-threshold: 5000
+                        record-exceptions:
+                            - org.springframework.web.client.HttpServerErrorException
+                            - java.io.IOException
+                            - java.sql.SQLTransientConnectionException
+                            - feign.FeignException
+                        register-health-indicator: true
+            bulkhead:
+                instances:
+                    DEFAULT_BULKHEAD:
+                        max-concurrent-calls: 10000
+                        max-wait-duration: 100000ms
+
+        logging:
+            level:
+                io.github.resilience4j: INFO
+                org.springframework.cloud.openfeign: INFO
+                org.springframework.cloud.stream: INFO
+                org.apache.kafka: ERROR
+
+        rollbar:
+            accessToken: ${ROLLBAR_TOKEN}
+    keycloak-service: 
+      application.yaml: |
+        service:
+            name: Keycloak
+        server:
+            error:
+                include-message: always
+            servlet:
+                context-path: /keycloakservice
+            port: 8091
+        spring:
+            application:
+                name: KEYCLOAK-SERVICE
+            datasource:
+                url: jdbc:postgresql://${DATABASE_URL}/users
+                username: ${DATABASE_USERNAME}
+                password: ${DATABASE_PASSWORD}
+            jpa:
+                hibernate:
+                    ddl-auto: update
+                show-sql: true
+                properties:
+                    hibernate:
+                        format_sql: true
+                        dialect: org.hibernate.dialect.PostgreSQLDialect
+            security:
+                oauth2:
+                    resourceserver:
+                        jwt:
+                            issuer-uri: ${JWT_ISSUER_URI}
+                            jwk-set-uri: ${JWT_ISSUER_URI}/protocol/openid-connect/certs
+        jwt:
+            auth:
+                converter:
+                    resource-id: keycloak-client
+                    principal-attribute: preferred_username
+        keycloak:
+            realm: microservices-realm
+            resource: keycloak-client
+            admin-cli:
+                name: admin-cli
+                secret: MK6z3NJCRT9oTRqXXPvaKnQmm6D0UMbB
+            auth-server-url: http://keycloak:8080
+            client:
+                secret: KdzCgauJ2QR1rRGUmAQsBOeMAyCi96kP
+        eureka:
+            instance:
+                prefer-ip-address: false
+                hostname: keycloak-service
+            client:
+                fetch-registry: true
+                register-with-eureka: true
+                service-url:
+                    defaultZone: ${EUREKA_SERVER_ADDRESS}
+        logging:
+            level:
+                org.springframework.security: INFO
+        rollbar:
+            accessToken: ${ROLLBAR_TOKEN}
+  standard:
+    service:
+      KAFKA_SERVER_ADDRESS: "kafka:9092"
+      EUREKA_SERVER_ADDRESS: "http://eureka-server:8761/eureka"
+      JWT_ISSUER_URI: "http://keycloak:8080/realms/microservices-realm"
+      ROLLBAR_TOKEN: ""
+    keycloak:
+      KC_HOSTNAME: keycloak
+      KC_HOSTNAME_PORT: 8080
+      KC_HOSTNAME_STRICT_BACKCHANNEL: 'false'
+      KC_HTTP_ENABLED: 'true'
+      KC_HOSTNAME_STRICT_HTTPS: 'false'
+      KC_HEALTH_ENABLED: 'true'
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+    kafka:
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_KRAFT_CLUSTER_ID: Dsc8_gZlRACcsCC8NHkTDA
+
+secret:
+  database:
+    DATABASE_URL: postgres:5432
+    DATABASE_USERNAME: admin
+    DATABASE_PASSWORD: changeme

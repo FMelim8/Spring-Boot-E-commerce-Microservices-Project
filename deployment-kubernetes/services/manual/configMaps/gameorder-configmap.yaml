@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gameorder-config
+data:
+  application.yaml: |
+    service:
+        name: Gameorder
+
+    server:
+        error:
+            include-message: always
+        port: 9095
+
+    spring:
+        application:
+            name: GAME-ORDER-SERVICE
+        datasource:
+            url: jdbc:postgresql://${DATABASE_URL}/orders
+            username: ${DATABASE_USERNAME}
+            password: ${DATABASE_PASSWORD}
+        jpa:
+            hibernate:
+                ddl-auto: update
+            show-sql: true
+            properties:
+                hibernate:
+                    format_sql: true
+                    dialect: org.hibernate.dialect.PostgreSQLDialect
+        cloud:
+            openfeign:
+                circuitbreaker:
+                    enabled: true
+                bulkhead:
+                    enabled: false
+                client:
+                    config:
+                        default:
+                            connectTimeout: 10000
+                            readTimeout: 10000
+
+        kafka:
+            bootstrap-servers: ${KAFKA_SERVER_ADDRESS}
+        security:
+            oauth2:
+                resourceserver:
+                    jwt:
+                        issuer-uri: ${JWT_ISSUER_URI}
+                        jwk-set-uri: ${JWT_ISSUER_URI}/protocol/openid-connect/certs
+
+    eureka:
+        instance:
+            prefer-ip-address: false
+            hostname: gameorder
+        client:
+            fetch-registry: true
+            register-with-eureka: true
+            service-url:
+                defaultZone: ${EUREKA_SERVER_ADDRESS}
+
+    jwt:
+        auth:
+            converter:
+                resource-id: keycloak-client
+                principal-attribute: preferred_username
+
+    keycloak:
+        realm: microservices-realm
+        resource: keycloak-client
+        auth-server-url: http://keycloak:8080
+        client:
+            secret: KdzCgauJ2QR1rRGUmAQsBOeMAyCi96kP
+
+        service:
+            name: KEYCLOAK-SERVICE
+
+    gamecatalog:
+        service:
+            name: GAME-CATALOG-SERVICE
+
+    management:
+        endpoint:
+            health:
+                show-details: always
+        health:
+            circuitbreakers:
+                enabled: true
+
+    resilience4j:
+        circuitbreaker:
+            instances:
+                DEFAULT_CIRCUITBREAKER:
+                    slidingWindowSize: 10
+                    sliding-window-type: count_based
+                    failureRateThreshold: 50
+                    waitDurationInOpenState: 3000
+                    permittedNumberOfCallsInHalfOpenState: 3
+                    minimumNumberOfCalls: 4
+                    automaticTransitionFromOpenToHalfOpenEnabled: true
+                    slow-call-rate-threshold: 50
+                    slow-call-duration-threshold: 5000
+                    record-exceptions:
+                        - org.springframework.web.client.HttpServerErrorException
+                        - java.io.IOException
+                        - java.sql.SQLTransientConnectionException
+                        - feign.FeignException
+                    register-health-indicator: true
+        bulkhead:
+            instances:
+                DEFAULT_BULKHEAD:
+                    max-concurrent-calls: 1000
+                    max-wait-duration: 10000ms
+
+    logging:
+        level:
+            io.github.resilience4j: INFO
+            org.springframework.cloud.openfeign: INFO
+            org.springframework.cloud.stream: INFO
+            org.apache.kafka: ERROR
+
+    rollbar:
+        accessToken: ${ROLLBAR_TOKEN}

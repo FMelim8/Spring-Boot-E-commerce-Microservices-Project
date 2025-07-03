@@ -1,0 +1,24 @@
+{{- range $name, $pvc := .Values.volume }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}-pvc
+{{- if or ($pvc.hook) ($pvc.keep) }}
+  annotations:
+  {{- if $pvc.hook }}
+    "helm.sh/hook": {{ $pvc.hook.type }}
+    "helm.sh/hook-weight": {{ $pvc.hook.weight | quote }}
+  {{- end }}
+  {{- if eq $pvc.keep "true" }}
+    "helm.sh/resource-policy": keep
+  {{- end }}
+{{- end }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $pvc.size }}
+  storageClassName: standard
+---
+{{- end }}

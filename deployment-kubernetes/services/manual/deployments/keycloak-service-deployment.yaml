@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak-service
+  template:
+    metadata:
+      labels:
+        app: keycloak-service
+    spec:
+      containers:
+        - name: keycloak-service
+          image: filipem/keycloak-service:1.2.0
+          ports:
+            - containerPort: 8091
+          volumeMounts:
+            - name: keycloak-service-config
+              mountPath: /config/application.yaml
+              subPath: application.yaml
+            - name: logs-volume
+              mountPath: /logs/keycloak
+          envFrom:
+            - secretRef:
+                name: database-secret
+            - configMapRef:
+                name: service-config
+          env:
+            - name: SPRING_CONFIG_LOCATION
+              value: "file:/config/"
+      volumes:
+        - name: keycloak-service-config
+          configMap:
+            name: keycloak-service-config
+        - name: logs-volume
+          persistentVolumeClaim:
+            claimName: logs-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-service
+spec:
+  selector:
+    app: keycloak-service
+  ports:
+    - protocol: TCP
+      port: 8091
+      targetPort: 8091
+  type: NodePort

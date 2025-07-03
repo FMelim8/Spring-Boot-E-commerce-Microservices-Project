@@ -1,0 +1,22 @@
+{{- range $name, $app := .Values.stack }}
+{{- if $app.port }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+spec:
+  selector:
+    app: {{ $name }}
+  ports:
+    - port: {{ $app.port }}
+      targetPort: {{ $app.port }}
+  {{- if $app.nodePort }}
+      nodePort: {{ $app.nodePort }}
+      protocol: TCP
+  type: NodePort
+  {{- else }}
+  type: ClusterIP
+  {{- end }}
+---
+{{- end }}
+{{- end }}  

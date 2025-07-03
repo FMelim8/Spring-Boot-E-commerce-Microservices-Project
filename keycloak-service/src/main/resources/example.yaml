@@ -1,0 +1,67 @@
+service:
+    name: Keycloak
+
+server:
+    error:
+        include-message: always
+    port: <your-port> #Example: 8091
+
+spring:
+    application:
+        name: <your-application-name> #Example: KEYCLOAK-SERVICE
+    #Database Configuration
+    datasource:
+        url: jdbc:<your-database>://${DATABASE_URL:<your-database-hostname>:<your-database-port>}/<your-keycloak-service-schema> #Example: jdbc:postgresql://${DATABASE_URL:localhost:5432}/users
+        username: ${DATABASE_USERNAME:<your-db-username>} #Example: ${DATABASE_USERNAME:admin}
+        password: ${DATABASE_PASSWORD:<your-db-password>} #Example: ${DATABASE_PASSWORD:changeme}
+    jpa:
+        hibernate:
+            ddl-auto: update
+        show-sql: true
+        properties:
+            hibernate:
+                format_sql: true
+                dialect: org.hibernate.dialect.<your-database-dialect> #Example: org.hibernate.dialect.PostgreSQLDialect
+    #Security Configuration
+    security:
+        oauth2:
+            resourceserver:
+                jwt:
+                    issuer-uri: ${JWT_ISSUER_URI:<your-keycloak-url>/realms/microservices-realm} #Example: http://localhost:8080/realms/microservices-realm
+                    jwk-set-uri: ${JWT_ISSUER_URI}/protocol/openid-connect/certs
+
+#JWT Configuration
+jwt:
+    auth:
+        converter:
+            resource-id: keycloak-client
+            principal-attribute: preferred_username
+
+#keycloak
+keycloak:
+    realm: <your-realm-name> #Default: microservices-realm
+    resource: <your-client-name> #Default: keycloak-client
+    admin-cli:
+        name: <your-admin-client-name> #Default: admin-cli
+        secret: <your-admin-client-secret> #Obtained from Keycloak
+    auth-server-url: <your-keycloak-url> #Example: http://localhost:8080/
+    client:
+        secret: <your-client-secret> #Obtained from Keycloak
+
+#Eureka Configuration
+eureka:
+    instance: prefer-ip-address = true
+    client:
+        fetch-registry: true
+        register-with-eureka: true
+        service-url:
+            defaultZone: ${EUREKA_SERVER_ADDRESS:<your-eureka-url>/eureka} #Example: ${EUREKA_SERVER_ADDRESS:http://localhost:8761/eureka}
+
+# Logging Configuration
+logging:
+    level:
+        org.springframework.security: INFO
+
+# Rollbar
+rollbar:
+    accessToken: <your-rollbar-token> #Obtained from Rollbar

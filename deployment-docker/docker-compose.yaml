@@ -1,0 +1,156 @@
+
+services:
+  postgres:
+    image: postgres:15.11-alpine
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker-configs/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - microservices
+
+  eureka-server:
+    image: filipem/eureka-service:1.1.0
+    container_name: eureka-service
+    ports:
+      - 8761:8761
+    environment:
+      SPRING_CONFIG_LOCATION: file:/config/
+    volumes:
+      - ./docker-configs/service-props/eureka:/config/
+    networks:
+      - microservices
+
+  keycloak-service:
+    image: filipem/keycloak-service:1.2.0
+    container_name: keycloak-service
+    ports:
+      - 8091:8091
+    environment:
+      DATABASE_URL: postgres:5432
+      DATABASE_USERNAME: ${DB_USER}
+      DATABASE_PASSWORD: ${DB_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      JWT_ISSUER_URI: http://keycloak:8080/realms/microservices-realm
+      ROLLBAR_TOKEN: ${ROLLBAR_TOKEN}
+      SPRING_CONFIG_LOCATION: file:/config/
+    depends_on:
+      - postgres
+      - eureka-server
+      - keycloak
+    networks:
+      - microservices
+    volumes:
+      - ./logs/keycloak-svc:/logs/keycloak-svc
+      - ./docker-configs/service-props/keycloak:/config/
+
+  gamecatalog-service:
+    image: filipem/gamecatalog-service:1.2.0
+    container_name: gamecatalog-service
+    ports:
+      - 9094:9094
+    environment:
+      DATABASE_URL: postgres:5432
+      DATABASE_USERNAME: ${DB_USER}
+      DATABASE_PASSWORD: ${DB_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_KAFKA_BOOTSTRAPSERVERS: http://kafka:9092
+      JWT_ISSUER_URI: http://keycloak:8080/realms/microservices-realm
+      ROLLBAR_TOKEN: ${ROLLBAR_TOKEN}
+      SPRING_CONFIG_LOCATION: file:/config/
+    depends_on:
+      - postgres
+      - kafka
+      - eureka-server
+    networks:
+      - microservices
+    volumes:
+      - ./logs/gamecatalog-svc:/logs/gamecatalog-svc
+      - ./docker-configs/service-props/gamecatalog:/config/
+
+  gameorder-service:
+    image: filipem/gameorder-service:1.2.0
+    container_name: gameorder-service
+    ports:
+      - 9095:9095
+    environment:
+      DATABASE_URL: postgres:5432
+      DATABASE_USERNAME: ${DB_USER}
+      DATABASE_PASSWORD: ${DB_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_KAFKA_BOOTSTRAPSERVERS: http://kafka:9092
+      JWT_ISSUER_URI: http://keycloak:8080/realms/microservices-realm
+      ROLLBAR_TOKEN: ${ROLLBAR_TOKEN}
+      SPRING_CONFIG_LOCATION: file:/config/
+    depends_on:
+      - postgres
+      - kafka
+      - eureka-server
+    networks:
+      - microservices
+    volumes:
+      - ./logs/gameorder-svc:/logs/gameorder-svc
+      - ./docker-configs/service-props/gameorder:/config/
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0.6
+    command: "start-dev --import-realm"
+    container_name: keycloak
+    environment:
+      KC_HOSTNAME: keycloak
+      KC_HOSTNAME_PORT: 8080
+      KC_HOSTNAME_STRICT_BACKCHANNEL: 'false'
+      KC_HTTP_ENABLED: 'true'
+      KC_HOSTNAME_STRICT_HTTPS: 'false'
+      KC_HEALTH_ENABLED: 'true'
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${DB_USER}
+      KC_DB_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - 8080:8080
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    networks:
+      - microservices
+    volumes:
+      - keycloak:/opt/jboss/keycloak/standalone/data
+      - ./docker-configs/keycloak:/opt/keycloak/data/import
+
+  kafka:
+    image: bitnami/kafka:4.0.0
+    container_name: kafka
+    environment:
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_KRAFT_CLUSTER_ID: Dsc8_gZlRACcsCC8NHkTDA
+    ports:
+      - 9092:9092
+    volumes:
+      - kafka-data:/bitnami/kafka
+    networks:
+      - microservices
+
+networks:
+  microservices:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  keycloak:
+  kafka-data:

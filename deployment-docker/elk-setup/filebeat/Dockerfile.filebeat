@@ -1,0 +1,12 @@
+FROM docker.elastic.co/beats/filebeat:8.18.1
+
+USER root
+COPY filebeat.yml /usr/share/filebeat/filebeat.yml
+
+RUN chmod go-w /usr/share/filebeat/filebeat.yml
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+USER filebeat
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

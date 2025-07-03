@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: index-config
+data:
+  MAIN_INDEX: "main-logs"
+  SYSTEM_INDEX: "system-logs"

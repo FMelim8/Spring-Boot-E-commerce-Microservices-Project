@@ -1,0 +1,34 @@
+{{- $ingressCount := 0 }}
+{{- range $name, $app := .Values.stack }}
+{{- if and ($app.ingress) (contains "true" $app.ingress) }}
+    {{- $ingressCount = add1 $ingressCount }}
+{{- end }}  
+{{- end }}
+{{ if gt $ingressCount 0}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: elk-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: localhost
+      http:
+        paths:
+        {{- range $name, $app := .Values.stack }}
+        {{- if and ($app.ingress) (contains "true" $app.ingress) }}
+          - path: /{{ $name | camelcase | lower }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $name }}
+                port:
+                  number: {{ $app.port }}
+        {{- end }}
+        {{- end }}
+
+{{- end }}
+---

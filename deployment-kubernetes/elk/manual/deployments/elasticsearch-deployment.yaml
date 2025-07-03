@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.18.1
+          ports:
+            - containerPort: 9200
+          env:
+            - name: ES_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
+          envFrom:
+            - secretRef:
+                name: elasticsearch-secret
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "0.2"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+          volumeMounts:
+            - name: elastic-config
+              mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+              subPath: elasticsearch.yml
+            - name: certs
+              mountPath: /usr/share/elasticsearch/config/certs
+            - name: elastic-data
+              mountPath: /usr/share/elasticsearch/data
+      volumes:
+        - name: elastic-config
+          configMap:
+            name: elastic-config
+        - name: certs
+          persistentVolumeClaim:
+            claimName: elastic-certs-pvc
+        - name: elastic-data
+          persistentVolumeClaim:
+            claimName: elastic-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+spec:
+  selector:
+    app: elasticsearch
+  ports:
+    - port: 9200
+      targetPort: 9200
+  type: ClusterIP

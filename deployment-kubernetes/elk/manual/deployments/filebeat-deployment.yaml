@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: filebeat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: filebeat
+  template:
+    metadata:
+      labels:
+        app: filebeat
+    spec:
+      containers:
+        - name: filebeat
+          image: docker.elastic.co/beats/filebeat:8.18.1
+          args: ["-c", "/usr/share/filebeat/config/filebeat.yml", "-e"]
+          envFrom:
+            - configMapRef:
+                name: ports-config
+          volumeMounts:
+            - name: filebeat-config
+              mountPath: /usr/share/filebeat/config/filebeat.yml
+              subPath: filebeat.yml
+            - name: logs-volume
+              mountPath: /usr/share/filebeat/logs/services
+            - name: certs-volume
+              mountPath: /usr/share/filebeat/config/certs
+            - name: filebeat-registry
+              mountPath: /var/lib/filebeat
+      volumes:
+        - name: filebeat-config
+          configMap:
+            name: filebeat-config
+        - name: logs-volume
+          persistentVolumeClaim:
+            claimName: logs-pvc
+        - name: certs-volume
+          persistentVolumeClaim:
+            claimName: elastic-certs-pvc
+        - name: filebeat-registry
+          persistentVolumeClaim:
+            claimName: filebeat-registry-pvc

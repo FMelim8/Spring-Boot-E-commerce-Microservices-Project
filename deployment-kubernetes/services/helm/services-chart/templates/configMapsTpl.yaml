@@ -1,0 +1,11 @@
+{{- range $name, $config := .Values.configMap.tpl }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-config
+data:
+{{- $templateName := printf "services.%s" $config.template }}
+{{- tpl (include $templateName $config) $config | indent 2 }}
+---
+{{- end }}
+  

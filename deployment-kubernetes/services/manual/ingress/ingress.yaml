@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: services-ingress
+  namespace: default
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - path: /gamecatalog
+            pathType: Prefix
+            backend:
+              service:
+                name: gamecatalog
+                port:
+                  number: 9094
+          - path: /gameorder
+            pathType: Prefix
+            backend:
+              service:
+                name: gameorder
+                port:
+                  number: 9095
+          - path: /keycloakservice
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak-service
+                port:
+                  number: 8091

@@ -1,0 +1,32 @@
+{{- range $name, $app := .Values.services }}
+{{- if $app.port }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+spec:
+  selector:
+    app: {{ $name }}
+  ports:
+  {{- if kindIs "slice" $app.port }}
+    {{- range $i, $val := $app.port }}
+    {{- range $t, $key := $val}}
+    - name: {{ $t }}
+      port: {{ $key }}
+      targetPort: {{ $key }}  
+    {{- end }}
+    {{- end }}
+  {{- else }}
+    - port: {{ $app.port }}
+      targetPort: {{ $app.port }}
+  {{- end }}
+  {{- if $app.nodePort }}
+      nodePort: {{ $app.nodePort }}
+      protocol: TCP
+  type: NodePort
+  {{- else }}
+  type: ClusterIP
+  {{- end }}
+---
+{{- end }}
+{{- end }}  

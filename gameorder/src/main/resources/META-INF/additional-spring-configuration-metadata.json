@@ -1,0 +1,23 @@
+{
+  "properties": [
+    {
+      "name": "jwt.secret",
+      "type": "java.lang.String",
+      "description": "Description for jwt.secret."
+    },
+    {
+      "name": "jwt.expirationMs",
+      "type": "java.lang.String",
+      "description": "Description for jwt.expirationMs."
+    },
+    {
+      "name": "gamecatalog.service.name",
+      "type": "java.lang.String",
+      "description": "Description for gamecatalog.service.name."
+    },
+    {
+      "name": "keycloak.service.name",
+      "type": "java.lang.String",
+      "description": "Description for keycloak.service.name."
+    }
+  ] }

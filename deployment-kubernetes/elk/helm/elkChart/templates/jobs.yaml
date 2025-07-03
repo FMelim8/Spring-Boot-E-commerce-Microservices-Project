@@ -1,0 +1,67 @@
+{{- range $name, $job := .Values.jobs }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}-job
+{{- with $job.hook }}
+  annotations:
+    "helm.sh/hook": {{ .type }}
+    "helm.sh/hook-weight": {{ .weight | quote }}
+    "helm.sh/hook-delete-policy": {{ .delete }}
+{{- end }}
+spec:
+  template:
+    spec:
+      {{- if $job.serviceAccountName }}
+      serviceAccountName: {{ $job.serviceAccountName }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ $job.image }}:{{ $job.tag }}
+          command:
+{{ toYaml $job.command | indent 12 }}
+          {{- if or ($job.config) ($job.secret) }}
+          envFrom:
+            {{- if $job.config.standard }}
+            {{- range $k, $val := $job.config.standard }}
+            - configMapRef:
+                name: {{ $val }}-config
+            {{- end }}
+            {{- end }}
+            {{- if $job.config.file }}
+            {{- range $k, $val := $job.config.file }}
+            - configMapRef:
+                name: {{ $val }}-config
+            {{- end }}
+            {{- end }}
+            {{- if $job.secret }}
+            {{- range $k, $val := $job.secret}}
+            - secretRef:
+                name: {{ $val }}-secret
+            {{- end }}
+            {{- end }}
+          {{- end }}
+{{- if $job.volumeMounts }}
+          volumeMounts:
+          {{- range $name, $path := $job.volumeMounts }} 
+            - name: {{ $name }}
+              mountPath: {{ $path }}
+          {{- end }}
+      volumes:
+      {{- if $job.emptyDirs }}
+      {{- range $i, $dir := $job.emptyDirs }}
+        - name: {{ $dir }}
+          emptyDir: {}
+      {{- end }}
+      {{- end }}
+      {{- if $job.volumes }}
+      {{- range $name, $path := $job.volumes }}
+        - name: {{ $name }}
+          persistentVolumeClaim:
+            claimName: {{ $path }}-pvc
+      {{- end }}
+      {{- end }}
+{{- end }}
+      restartPolicy: OnFailure
+---
+{{- end }}

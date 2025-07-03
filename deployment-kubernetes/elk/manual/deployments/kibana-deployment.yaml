@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      initContainers:
+        - name: wait-for-kibana-token
+          image: alpine/k8s:1.33.1
+          command:
+            - sh
+            - -c
+            - |
+              echo "waiting for Kibana service account token secret"
+              until kubectl get secret kibana-token -n default > /dev/null 2>&1; do
+                echo "secret not yet available, retrying"
+                sleep 2
+              done
+              echo Kibana token secret found"
+          serviceAccountName: elastic-admin
+      containers:
+        - name: kibana
+          image: docker.elastic.co/kibana/kibana:8.18.1
+          ports:
+            - containerPort: 5601
+          envFrom:
+            - secretRef:
+                name: kibana-token
+            - configMapRef:
+                name: ports-config
+          volumeMounts:
+            - name: kibana-config
+              mountPath: /usr/share/kibana/config/kibana.yml
+              subPath: kibana.yml
+            - name: certs
+              mountPath: /usr/share/kibana/config/certs
+      volumes:
+        - name: kibana-config
+          configMap:
+            name: kibana-config
+        - name: certs
+          persistentVolumeClaim:
+            claimName: elastic-certs-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+spec:
+  selector:
+    app: kibana
+  ports:
+    - port: 5601
+      protocol: TCP
+      targetPort: 5601
+      nodePort: 30601
+  type: NodePort

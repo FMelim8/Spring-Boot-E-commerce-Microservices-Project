@@ -1,0 +1,15 @@
+spring:
+    application:
+        name: <your-eureka-service-name> #Example: eureka-server
+
+server:
+    port: <your-port> #Example: 8761
+
+eureka:
+    instance:
+        hostname: <your-hostname> #Example: localhost
+    client:
+        register-with-eureka: false
+        fetch-registry: false
+    server:
+        renewal-percent-threshold: <your-percentage-threshold> #Example: 0.49

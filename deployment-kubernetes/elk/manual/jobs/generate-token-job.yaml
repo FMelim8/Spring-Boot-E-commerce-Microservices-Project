@@ -1,0 +1,85 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: generate-token-job
+  labels:
+    app: elasticsearch
+spec:
+  template:
+    spec:
+      serviceAccountName: elastic-admin
+      containers:
+        - name: generate-token
+          image: alpine/k8s:1.33.1
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              echo "Waiting for Elasticsearch to be ready..."
+              until curl -k -s -u elastic:$ELASTIC_PASSWORD --fail https://elasticsearch:$ELASTIC_PORT; do
+                echo "Elasticsearch is not ready, retrying in 5s"
+                sleep 5
+              done
+
+              tokenraw=$(curl -k -s -u elastic:$ELASTIC_PASSWORD \
+                -X 'POST' 'https://elasticsearch:$ELASTIC_PORT/_security/service/elastic/kibana/credential/token')
+
+              token=$(echo "$tokenraw" | jq -r .token.value )
+
+              if [ -z "$token" ]; then
+                echo "failed to retrieve token"
+                exit 1
+              fi
+
+              KEY1=$(od  -vN 32 -An -tx1 /dev/urandom | tr -d " \n")
+              KEY2=$(od  -vN 32 -An -tx1 /dev/urandom | tr -d " \n")
+              KEY3=$(od  -vN 32 -An -tx1 /dev/urandom | tr -d " \n")
+
+              kubectl create secret generic kibana-token \
+                --from-literal=ELASTICSEARCH_SERVICE_TOKEN="$token" \
+                --from-literal=XPACK_SECURITY_ENCRYPTIONKEY="$KEY1" \
+                --from-literal=XPACK_REPORTING_ENCRYPTIONKE="$KEY2" \
+                --from-literal=XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY="$KEY3" \
+                --dry-run=client -o yaml | kubectl apply -f - || kubectl delete secret kibana-token && kubectl create secret generic kibana-token \
+                --from-literal=ELASTICSEARCH_SERVICE_TOKEN="$token" \
+                --from-literal=XPACK_SECURITY_ENCRYPTIONKEY="$KEY1" \
+                --from-literal=XPACK_REPORTING_ENCRYPTIONKE="$KEY2" \
+                --from-literal=XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY="$KEY3" \
+                --dry-run=client -o yaml | kubectl apply -f -
+
+              echo "creating the indices"
+              curl -s -o /dev/null -X PUT https://elasticsearch:$ELASTIC_PORT/$MAIN_INDEX \
+                --insecure -u elastic:$ELASTIC_PASSWORD \
+                -H 'Content-Type: application/json' \
+                -d '{
+                  "settings": {
+                    "number_of_replicas": 0
+                  }
+                }'
+
+              curl -s -o /dev/null -X PUT https://elasticsearch:$ELASTIC_PORT/$SYSTEM_INDEX \
+                --insecure -u elastic:$ELASTIC_PASSWORD \
+                -H 'Content-Type: application/json' \
+                -d '{
+                  "settings": {
+                    "number_of_replicas": 0
+                  }
+                }'
+          envFrom:
+            - secretRef:
+                name: elasticsearch-secret
+            - configMapRef:
+                name: index-config
+            - configMapRef:
+                name: ports-config
+
+          volumeMounts:
+            - name: certs
+              mountPath: /certs
+      volumes:
+        - name: certs
+          persistentVolumeClaim:
+            claimName: elastic-certs-pvc
+      restartPolicy: OnFailure

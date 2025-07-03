@@ -1,0 +1,17 @@
+{{- range $name, $config := .Values.configMap.file }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-config
+data:
+{{- range $file, $content := $config }}
+{{- if or (contains "yml" $file) (contains "yaml" $file) }}
+  {{ $file }}:{{ toYaml $content | indent 2}}
+{{- end }}
+{{- if contains "conf" $file }}
+  {{ $file }}: |
+{{ $content | indent 4}}
+{{- end }}
+{{- end }}      
+---
+{{- end }}

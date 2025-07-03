@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gamecatalog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gamecatalog
+  template:
+    metadata:
+      labels:
+        app: gamecatalog
+    spec:
+      containers:
+        - name: gamecatalog
+          image: filipem/gamecatalog-service:1.2.0
+          ports:
+            - containerPort: 9094
+          volumeMounts:
+            - name: gamecatalog-config
+              mountPath: /config/application.yaml
+              subPath: application.yaml
+            - name: logs-volume
+              mountPath: /logs/gamecatalog
+          envFrom:
+            - secretRef:
+                name: database-secret
+            - configMapRef:
+                name: service-config
+          env:
+            - name: SPRING_CONFIG_LOCATION
+              value: "file:/config/"
+      volumes:
+        - name: gamecatalog-config
+          configMap:
+            name: gamecatalog-config
+        - name: logs-volume
+          persistentVolumeClaim:
+            claimName: logs-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gamecatalog
+spec:
+  selector:
+    app: gamecatalog
+  ports:
+    - protocol: TCP
+      port: 9094
+      targetPort: 9094
+  type: NodePort

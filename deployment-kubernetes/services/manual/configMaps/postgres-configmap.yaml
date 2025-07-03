@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init
+data:
+  init.sql: |
+    CREATE DATABASE games;
+    CREATE DATABASE orders;
+    CREATE DATABASE users;
+    CREATE DATABASE keycloak;

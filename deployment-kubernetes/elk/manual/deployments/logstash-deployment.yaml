@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logstash
+  template:
+    metadata:
+      labels:
+        app: logstash
+    spec:
+      containers:
+        - name: logstash
+          image: docker.elastic.co/logstash/logstash:8.18.1
+          ports:
+            - containerPort: 5044
+          envFrom:
+            - configMapRef:
+                name: ports-config
+            - configMapRef:
+                name: index-config
+            - secretRef:
+                name: elasticsearch-secret
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/logstash/config/logstash.yml
+              subPath: logstash.yml
+            - name: pipeline
+              mountPath: /usr/share/logstash/pipeline/logstash.conf
+              subPath: logstash.conf
+            - name: certs
+              mountPath: /usr/share/logstash/config/certs
+      volumes:
+        - name: config
+          configMap:
+            name: logstash-config
+            items:
+              - key: logstash.yml
+                path: logstash.yml
+        - name: pipeline
+          configMap:
+            name: logstash-config
+            items:
+              - key: logstash.conf
+                path: logstash.conf
+        - name: certs
+          persistentVolumeClaim:
+            claimName: elastic-certs-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash
+spec:
+  selector:
+    app: logstash
+  ports:
+    - port: 5044
+      targetPort: 5044
+  type: ClusterIP
+

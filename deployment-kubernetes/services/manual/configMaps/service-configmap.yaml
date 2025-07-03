@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-config
+data:
+  KAFKA_SERVER_ADDRESS: "kafka:9092"
+  EUREKA_SERVER_ADDRESS: "http://eureka-server:8761/eureka"
+  JWT_ISSUER_URI: "http://keycloak:8080/realms/microservices-realm"
+  ROLLBAR_TOKEN: ""

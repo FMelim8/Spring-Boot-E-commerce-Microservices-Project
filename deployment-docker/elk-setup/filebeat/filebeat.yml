@@ -1,0 +1,24 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /logs/gamecatalog-svc/*.log
+      - /logs/gameorder-svc/*.log
+      - /logs/keycloak-svc/*.log
+    scan_frequency: 10s
+    ignore_older: 144h
+    close_inactive: 5m
+    close_removed: true
+    clean_removed: true
+    close_renamed: true
+    multiline:
+      pattern: '^\{'
+      negate: true
+      match: after
+
+output.logstash:
+  hosts: ["logstash:${LOGSTASH_PORT}"]
+  ssl:
+    certificate_authorities: ["/usr/share/filebeat/certs/ca/ca.crt"]
+    certificate: "/usr/share/filebeat/certs/filebeat/filebeat.crt"
+    key: "/usr/share/filebeat/certs/filebeat/filebeat.key"

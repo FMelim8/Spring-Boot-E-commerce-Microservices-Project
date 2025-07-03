@@ -1,0 +1,454 @@
+stack:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch
+    port: 9200
+    replicas: 1
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "0.2"
+      limits:
+        memory: "2Gi"
+        cpu: "1"
+    env:
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    secret:
+      - elasticsearch
+    volumeMounts:
+      elastic-config:
+        path: /usr/share/elasticsearch/config/elasticsearch.yml
+        subPath: elasticsearch.yml
+      certs: 
+        path: /usr/share/elasticsearch/config/certs
+      elastic-data:
+        path: /usr/share/elasticsearch/data
+    volumes:
+      elastic-config:
+        type: configMap
+        name: elasticsearch-config
+      certs: 
+        type: pvc
+        name: elastic-certs
+      elastic-data:
+        type: pvc
+        name: elastic-data
+
+  
+  logstash:
+    image: docker.elastic.co/logstash/logstash
+    port: 5044
+    replicas: 1
+    config:
+      - ports
+      - index
+    secret:
+      - elasticsearch
+    volumeMounts:
+      config: 
+        path: /usr/share/logstash/config/logstash.yml
+        subPath: logstash.yml
+      pipeline:
+        path: /usr/share/logstash/pipeline/logstash.conf
+        subPath: logstash.conf
+      certs: 
+        path: /usr/share/logstash/config/certs
+    volumes:
+      config:
+        type: configMap
+        name: logstash-config
+        items: 
+          - key: logstash.yml
+            path: logstash.yml
+      pipeline:
+        type: configMap
+        name: logstash-config
+        items:
+          - key: logstash.conf
+            path: logstash.conf
+      certs:
+        type: pvc
+        name: elastic-certs
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana
+    port: 5601
+    nodePort: 30601
+    replicas: 1
+    ingress: "true"
+    initContainers:
+      wait-for-kibana-token:
+        image: alpine/k8s:1.33.1
+        volumeMounts:
+          ready-volume:
+            path: /ready
+        command:
+          - sh
+          - -c
+          - |
+            sleep 10
+            echo "waiting for the token job ready signal"
+            while [ ! -f /ready/done ]; do
+              echo "token not ready yet"
+              sleep 2
+            done
+            echo "token ready"
+    config:
+      - ports
+    secret:
+      - kibana-token
+    volumeMounts:
+      kibana-config:
+        path: /usr/share/kibana/config/kibana.yml
+        subPath: kibana.yml
+      certs:
+        path: /usr/share/kibana/config/certs
+    volumes:
+      kibana-config:
+        type: configMap
+        name: kibana-config
+      certs:
+        type: pvc
+        name: elastic-certs
+      ready-volume:
+        type: pvc
+        name: ready-volume
+    
+  
+  filebeat:
+    image: docker.elastic.co/beats/filebeat
+    replicas: 1
+    args: ["-c", "/usr/share/filebeat/config/filebeat.yml", "-e"]
+    config:
+      - ports
+    volumeMounts:
+      filebeat-config:
+        path: /usr/share/filebeat/filebeat.yml
+        subPath: filebeat.yml
+      logs-volume:
+        path: /usr/share/filebeat/logs/services
+      certs-volume:
+        path: /usr/share/filebeat/config/certs
+      filebeat-registry:
+        path: /var/lib/filebeat
+    volumes:
+      filebeat-config:
+        type: configMap
+        name: filebeat-config
+      logs-volume:
+        type: pvc
+        name: logs
+      certs-volume:
+        type: pvc
+        name: elastic-certs
+      filebeat-registry:
+        type: pvc
+        name: filebeat-registry
+
+
+versions:
+  stack: 8.18.1
+
+accounts:
+  elastic-admin:
+    roles:
+      - elastic-admin-role
+
+roles:
+  elastic-admin-role:
+    rules:
+      - apiGroups: [""]
+        resources: ["pods", "pods/exec","secrets"]
+        verbs: ["get","create" ,"update" ,"patch" ,"delete" , "list", "watch", "exec"]
+    apiGroup: rbac.authorization.k8s.io
+    
+volume:
+  elastic-certs:
+    keep: "true"
+    hook:
+      type: pre-install
+      weight: -6
+    size: 500Mi
+  elastic-data:
+    size: 500Mi
+  filebeat-registry:
+    size: 500Mi
+  ready-volume:
+    size: 1Mi
+
+configMap:
+  file:
+    elasticsearch: 
+      elasticsearch.yml: |
+        xpack.security.enabled: true
+        discovery.type: single-node
+
+        network.host: 0.0.0.0
+        http.port: 9200
+
+        xpack.security.http.ssl:
+          enabled: true
+          key: /usr/share/elasticsearch/config/certs/elasticsearch/elasticsearch.key
+          certificate: /usr/share/elasticsearch/config/certs/elasticsearch/elasticsearch.crt
+          certificate_authorities: ["/usr/share/elasticsearch/config/certs/ca/ca.crt"]
+
+        xpack.security.transport.ssl:
+          enabled: true
+          key: /usr/share/elasticsearch/config/certs/elasticsearch/elasticsearch.key
+          certificate: /usr/share/elasticsearch/config/certs/elasticsearch/elasticsearch.crt
+          certificate_authorities: ["/usr/share/elasticsearch/config/certs/ca/ca.crt"]
+          verification_mode: certificate
+    filebeat:
+      filebeat.yml: |
+        filebeat.inputs:
+          - type: log
+            enabled: true
+            paths:
+              - /usr/share/filebeat/logs/services/*.log
+
+        output.logstash:
+          enabled: true
+          hosts: ["logstash:${LOGSTASH_PORT}"]
+          ssl:
+            certificate_authorities: ["/usr/share/filebeat/config/certs/ca/ca.crt"]
+            certificate: "/usr/share/filebeat/config/certs/filebeat/filebeat.crt"
+            key: "/usr/share/filebeat/config/certs/filebeat/filebeat.key"
+    kibana:
+      kibana.yml: |
+        server.name: kibana
+        server.host: "0.0.0.0"
+        server.basePath: "/kibana"
+        server.rewriteBasePath : "true"
+        server.publicBaseUrl: "https://localhost/kibana"
+
+        csp.strict: false
+        csp.warnLegacyBrowsers: false
+        csp.script_src:
+          - unsafe-inline
+          - self
+          - unsafe-eval
+
+        elasticsearch.hosts: ["https://elasticsearch:${ELASTIC_PORT}"]
+        elasticsearch.serviceAccountToken: "${ELASTICSEARCH_SERVICE_TOKEN}"
+
+        elasticsearch.ssl.certificateAuthorities: ["/usr/share/kibana/config/certs/ca/ca.crt"]
+        elasticsearch.ssl.verificationMode: full
+
+        server.ssl.enabled: true
+        server.ssl.certificate: /usr/share/kibana/config/certs/kibana/kibana.crt
+        server.ssl.key: /usr/share/kibana/config/certs/kibana/kibana.key
+    logstash:
+      logstash.yml: |
+        http.host: "0.0.0.0"
+        xpack.monitoring.elasticsearch.username: elastic
+        xpack.monitoring.elasticsearch.password: ${ELASTIC_PASSWORD}
+        xpack.monitoring.elasticsearch.hosts: [ "https://elasticsearch:${ELASTIC_PORT}" ]
+        xpack.monitoring.elasticsearch.ssl.certificate_authority: /usr/share/logstash/config/certs/ca/ca.crt
+      logstash.conf: |-
+        input {
+          beats {
+            port => "${LOGSTASH_PORT}"
+            ssl_enabled => true
+            ssl_certificate => "/usr/share/logstash/config/certs/logstash/logstash.crt"
+            ssl_key => "/usr/share/logstash/config/certs/logstash/logstash.key"
+            ssl_verify_mode => "none"
+          }
+        }
+
+
+        filter {
+          json {
+            source => "message"
+            target => "json"
+          }
+        }
+
+        output {
+          if [json][logger_name] =~ /^com\.example/ {
+            elasticsearch {
+              hosts => ["https://elasticsearch:${ELASTIC_PORT}"]
+              ssl_enabled => true
+              ssl_certificate_authorities => "/usr/share/logstash/config/certs/ca/ca.crt"
+              ssl_verification_mode => "none"
+              user => "elastic"
+              password => "${ELASTIC_PASSWORD}"
+              index => "${MAIN_INDEX}"
+            }
+          } else {
+            elasticsearch {
+              hosts => ["https://elasticsearch:${ELASTIC_PORT}"]
+              ssl_enabled => true
+              ssl_certificate_authorities => "/usr/share/logstash/config/certs/ca/ca.crt"
+              ssl_verification_mode => "none"
+              user => "elastic"
+              password => "${ELASTIC_PASSWORD}"
+              index => "${SYSTEM_INDEX}"
+            }
+          }
+
+          stdout { 
+            codec => rubydebug {
+              metadata => true
+            }
+          }
+        }
+  standard:
+    index:
+      MAIN_INDEX: "main-logs"
+      SYSTEM_INDEX: "system-logs"
+    ports:
+      KIBANA_PORT: "5601"
+      ELASTIC_PORT: "9200"
+      LOGSTASH_PORT: "5044"
+
+secret:
+  elasticsearch:
+    ELASTIC_PASSWORD: elastic
+
+jobs:
+  generate-certs:
+    image: docker.elastic.co/elasticsearch/elasticsearch
+    tag: 8.18.1
+    hook:
+      type: pre-install
+      weight: -5
+      delete: hook-succeeded
+    volumeMounts:
+      certs: /certs
+    volumes:
+      certs: elastic-certs
+    command:
+      - bash
+      - -c
+      - |
+        cat > /certs/instances.yml <<EOL
+        instances:
+          - name: elasticsearch
+            dns:
+              - elasticsearch
+            ip:
+              - 127.0.0.1
+          - name: kibana
+            dns:
+              - kibana
+            ip:
+              - 127.0.0.1
+          - name: logstash
+            dns:
+              - logstash
+            ip:
+              - 127.0.0.1
+          - name: filebeat
+            dns:
+              - filebeat
+            ip:
+              - 127.0.0.1
+        EOL
+
+        elasticsearch-certutil ca --silent --pem --out /certs/ca.zip && \
+        unzip /certs/ca.zip -d /certs && \
+        rm /certs/ca.zip
+
+        elasticsearch-certutil cert --silent --pem \
+          --in /certs/instances.yml \
+          --ca-cert /certs/ca/ca.crt \
+          --ca-key /certs/ca/ca.key \
+          --out /certs/bundle.zip && \
+        unzip /certs/bundle.zip -d /certs && \
+        rm /certs/bundle.zip /certs/instances.yml
+  generate-token:
+    image: alpine/k8s
+    tag: 1.33.1
+    serviceAccountName: elastic-admin
+    config:
+      standard:
+        - index
+        - ports
+    secret:
+      - elasticsearch
+    volumeMounts:
+      ready-volume: /ready
+    volumes:
+      ready-volume: ready-volume
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+
+        echo "Waiting for Elasticsearch to be ready"
+        until curl -k -s -u elastic:$ELASTIC_PASSWORD --fail https://elasticsearch:$((ELASTIC_PORT)); do
+          echo "Elasticsearch is not ready, retrying in 5s"
+          sleep 5
+        done
+
+        echo "creating token with curl"
+        tokenraw=$(curl -k -s -u elastic:$ELASTIC_PASSWORD \
+          -X 'POST' "https://elasticsearch:$((ELASTIC_PORT))/_security/service/elastic/kibana/credential/token")
+
+        echo "formating token"
+        token=$(echo "$tokenraw" | jq -r .token.value )
+
+        if [ -z "$token" ]; then
+          echo "failed to retrieve token"
+          exit 1
+        fi
+
+        echo "creating keys"
+        KEY1=$(od  -vN 32 -An -tx1 /dev/urandom | tr -d " \n")
+        KEY2=$(od  -vN 32 -An -tx1 /dev/urandom | tr -d " \n")
+        KEY3=$(od  -vN 32 -An -tx1 /dev/urandom | tr -d " \n")
+
+        echo "creating the kibana-token secret"
+        kubectl create secret generic kibana-token-secret \
+          --from-literal=ELASTICSEARCH_SERVICE_TOKEN="$token" \
+          --from-literal=KIBANA_SECURITY_ENCRYPTION_KEY="$KEY1" \
+          --from-literal=KIBANA_REPORTING_ENCRYPTION_KEY="$KEY2" \
+          --from-literal=KIBANA_SAVEDOBJECTS_ENCRYPTION_KEY="$KEY3" \
+          --dry-run=client -o yaml | kubectl apply -f - || kubectl delete secret kibana-token-secret && kubectl create secret generic kibana-token-secret \
+          --from-literal=ELASTICSEARCH_SERVICE_TOKEN="$token" \
+          --from-literal=KIBANA_SECURITY_ENCRYPTION_KEY="$KEY1" \
+          --from-literal=KIBANA_REPORTING_ENCRYPTION_KEY="$KEY2" \
+          --from-literal=KIBANA_SAVEDOBJECTS_ENCRYPTION_KEY="$KEY3" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+        echo "creating the indices"
+        curl -s -o /dev/null -X PUT https://elasticsearch:$ELASTIC_PORT/$MAIN_INDEX \
+          --insecure -u elastic:$ELASTIC_PASSWORD \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "settings": {
+              "number_of_replicas": 0
+            }
+          }'
+
+        curl -s -o /dev/null -X PUT https://elasticsearch:$ELASTIC_PORT/$SYSTEM_INDEX \
+          --insecure -u elastic:$ELASTIC_PASSWORD \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "settings": {
+              "number_of_replicas": 0
+            }
+          }'
+
+        echo "test"
+        curl -s -o /dev/null -X PUT https://elasticsearch:$ELASTIC_PORT/$MAIN_INDEX/_settings \
+          --insecure -u elastic:$ELASTIC_PASSWORD \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "index": {
+              "number_of_replicas": 0
+            }
+          }'
+
+        curl -s -o /dev/null -X PUT https://elasticsearch:$ELASTIC_PORT/$SYSTEM_INDEX/_settings \
+          --insecure -u elastic:$ELASTIC_PASSWORD \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "index": {
+              "number_of_replicas": 0
+            }
+          }'
+        
+        echo "READY" > /ready/done
+        echo "done"
+  

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ports-config
+data:
+  KIBANA_PORT: "5601"
+  ELASITC_PORT: "9200"
+  LOGSTASH_PORT: "5044"

@@ -1,0 +1,67 @@
+service:
+    name: Keycloak
+
+server:
+    error:
+        include-message: always
+    port: 8091
+
+spring:
+    application:
+        name: KEYCLOAK-SERVICE
+    #Database Configuration
+    datasource:
+        url: jdbc:postgresql://${DATABASE_URL}/users
+        username: ${DATABASE_USERNAME}
+        password: ${DATABASE_PASSWORD}
+    jpa:
+        hibernate:
+            ddl-auto: update
+        show-sql: true
+        properties:
+            hibernate:
+                format_sql: true
+                dialect: org.hibernate.dialect.PostgreSQLDialect
+    #Security Configuration
+    security:
+        oauth2:
+            resourceserver:
+                jwt:
+                    issuer-uri: ${JWT_ISSUER_URI}
+                    jwk-set-uri: ${JWT_ISSUER_URI}/protocol/openid-connect/certs
+
+#JWT Configuration
+jwt:
+    auth:
+        converter:
+            resource-id: keycloak-client
+            principal-attribute: preferred_username
+
+#keycloak
+keycloak:
+    realm: microservices-realm
+    resource: keycloak-client
+    admin-cli:
+        name: admin-cli
+        secret: MK6z3NJCRT9oTRqXXPvaKnQmm6D0UMbB
+    auth-server-url: http://keycloak:8080
+    client:
+        secret: KdzCgauJ2QR1rRGUmAQsBOeMAyCi96kP
+
+#Eureka Configuration
+eureka:
+    instance: prefer-ip-address = true
+    client:
+        fetch-registry: true
+        register-with-eureka: true
+        service-url:
+            defaultZone: ${EUREKA_SERVER_ADDRESS}
+
+# Logging Configuration
+logging:
+    level:
+        org.springframework.security: INFO
+
+# Rollbar
+rollbar:
+    accessToken: ${ROLLBAR_TOKEN}

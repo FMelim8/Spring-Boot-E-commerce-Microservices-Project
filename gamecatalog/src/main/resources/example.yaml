@@ -1,0 +1,63 @@
+#Service name used for logging
+service:
+    name: <your-service-name> #Example: Gamecatalog
+
+#Server Configuration
+server:
+    port: <your-port> #Example: 9094
+    error:
+        include-message: always
+
+spring:
+    application:
+        name: <your-application-name> #Example: GAME-CATALOG-SERVICE
+    #Database Configuration
+    datasource:
+        url: jdbc:<your-database>://${DATABASE_URL:<your-database-hostname>:<your-database-port>}/<your-gamecatalog-schema> #Example: jdbc:postgresql://${DATABASE_URL:localhost:5432}/games
+        username: ${DATABASE_USERNAME:<your-db-username>} #Example: ${DATABASE_USERNAME:admin}
+        password: ${DATABASE_PASSWORD:<your-db-password>} #Example: ${DATABASE_PASSWORD:changeme}
+    jpa:
+        hibernate:
+            ddl-auto: update
+        show-sql: true
+        properties:
+            hibernate:
+                format_sql: true
+                dialect: org.hibernate.dialect.<your-database-dialect> #Example: org.hibernate.dialect.PostgreSQLDialect
+    #Kafka connection
+    kafka:
+        bootstrap-servers: ${KAFKA_SERVER_ADDRESS:<your-kafka-url>} #Example ${KAFKA_SERVER_ADDRESS:http://localhost:9092}
+    # Security Configuration
+    security:
+        oauth2:
+            resourceserver:
+                jwt:
+                    issuer-uri: ${JWT_ISSUER_URI:<your-keycloak-url>/realms/microservices-realm} #Example: http://localhost:8080/realms/microservices-realm
+                    jwk-set-uri: ${JWT_ISSUER_URI}/protocol/openid-connect/certs
+
+#Eureka Configuration
+eureka:
+    instance:
+        prefer-ip-address: true
+    client:
+        fetch-registry: true
+        register-with-eureka: true
+        service-url:
+            defaultZone: ${EUREKA_SERVER_ADDRESS:<your-eureka-url>/eureka} #Example: ${EUREKA_SERVER_ADDRESS:http://localhost:8761/eureka}
+
+#JWT Configuration
+jwt:
+    auth:
+        converter:
+            resource-id: keycloak-client #Keycloak client name
+            principal-attribute: preferred_username
+
+#Logging levels
+logging:
+    level:
+        org.apache.kafka: ERROR #Used to mask the Warnings when the Kafka server isn't up. Can be changed to "INFO"
+
+
+#Rollbar Configuration
+rollbar:
+    accessToken: <your-rollbar-token> #Obtained from Rollbar

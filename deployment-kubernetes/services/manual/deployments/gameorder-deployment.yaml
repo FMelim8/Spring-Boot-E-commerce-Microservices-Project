@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gameorder
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gameorder
+  template:
+    metadata:
+      labels:
+        app: gameorder
+    spec:
+      containers:
+        - name: gameorder
+          image: filipem/gameorder-service:1.2.0
+          ports:
+            - containerPort: 9095
+          volumeMounts:
+            - name: gameorder-config
+              mountPath: /config/application.yaml
+              subPath: application.yaml
+            - name: logs-volume
+              mountPath: /logs/gameorder
+          envFrom:
+            - secretRef:
+                name: database-secret
+            - configMapRef:
+                name: service-config
+          env:
+            - name: SPRING_CONFIG_LOCATION
+              value: "file:/config/"
+      volumes:
+        - name: gameorder-config
+          configMap:
+            name: gameorder-config
+        - name: logs-volume
+          persistentVolumeClaim:
+            claimName: logs-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gameorder
+spec:
+  selector:
+    app: gameorder
+  ports:
+    - protocol: TCP
+      port: 9095
+      targetPort: 9095
+  type: NodePort

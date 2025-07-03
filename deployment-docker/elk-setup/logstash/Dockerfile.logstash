@@ -1,0 +1,10 @@
+FROM docker.elastic.co/logstash/logstash:8.18.1
+
+USER root
+
+COPY ./certs /usr/share/logstash/config/certs
+
+RUN chmod 777 config/certs/ca/ca.crt
+RUN chmod 777 config/certs/ca/ca.key
+
+USER logstash

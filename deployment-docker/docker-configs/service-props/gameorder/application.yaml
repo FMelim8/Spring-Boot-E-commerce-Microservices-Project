@@ -1,0 +1,126 @@
+service:
+    name: Gameorder
+
+server:
+    error:
+        include-message: always
+    port: 9095
+
+spring:
+    application:
+        name: GAME-ORDER-SERVICE
+    #Database Configuration
+    datasource:
+        url: jdbc:postgresql://${DATABASE_URL}/orders
+        username: ${DATABASE_USERNAME}
+        password: ${DATABASE_PASSWORD}
+    jpa:
+        hibernate:
+            ddl-auto: update
+        show-sql: true
+        properties:
+            hibernate:
+                format_sql: true
+                dialect: org.hibernate.dialect.PostgreSQLDialect
+    #Enable Circuitbreaker in Openfeign
+    cloud:
+        openfeign:
+            circuitbreaker:
+                enabled: true
+            #Feign timeout Configuration
+            client:
+                config:
+                    default:
+                        connectTimeout: 2000
+                        readTimeout: 5000
+
+    #Kafka connection
+    kafka:
+        bootstrap-servers: ${KAFKA_SERVER_ADDRESS}
+    #Security Configuration
+    security:
+        oauth2:
+            resourceserver:
+                jwt:
+                    issuer-uri: ${JWT_ISSUER_URI}
+                    jwk-set-uri: ${JWT_ISSUER_URI}/protocol/openid-connect/certs
+
+#Eureka Configuration
+eureka:
+    instance:
+        prefer-ip-address: true
+    client:
+        fetch-registry: true
+        register-with-eureka: true
+        service-url:
+            defaultZone: ${EUREKA_SERVER_ADDRESS}
+
+#JWT Configuration
+jwt:
+    auth:
+        converter:
+            resource-id: keycloak-client
+            principal-attribute: preferred_username
+
+#keycloak
+keycloak:
+    realm: microservices-realm
+    resource: keycloak-client
+    auth-server-url: http://keycloak:8080
+    client:
+        secret: KdzCgauJ2QR1rRGUmAQsBOeMAyCi96kP
+
+    #Services
+    service:
+        name: KEYCLOAK-SERVICE
+
+gamecatalog:
+    service:
+        name: GAME-CATALOG-SERVICE
+
+#Actuator Details
+management:
+    endpoint:
+        health:
+            show-details: always
+    health:
+        circuitbreakers:
+            enabled: true
+
+#Resilience4j Configurations
+resilience4j:
+    circuitbreaker:
+        instances:
+            DEFAULT_CIRCUITBREAKER:
+                slidingWindowSize: 10
+                sliding-window-type: count_based
+                failureRateThreshold: 50
+                waitDurationInOpenState: 3000
+                permittedNumberOfCallsInHalfOpenState: 3
+                minimumNumberOfCalls: 4
+                automaticTransitionFromOpenToHalfOpenEnabled: true
+                slow-call-rate-threshold: 50
+                slow-call-duration-threshold: 5000
+                record-exceptions:
+                    - org.springframework.web.client.HttpServerErrorException
+                    - java.io.IOException
+                    - java.sql.SQLTransientConnectionException
+                    - feign.FeignException
+                register-health-indicator: true
+    bulkhead:
+        instances:
+            DEFAULT_BULKHEAD:
+                max-concurrent-calls: 500
+                max-wait-duration: 10000ms
+
+#Logging levels
+logging:
+    level:
+        io.github.resilience4j: INFO
+        org.springframework.cloud.openfeign: INFO
+        org.springframework.cloud.stream: INFO
+        org.apache.kafka: ERROR
+
+#Rollbar Configuration
+rollbar:
+    accessToken: ${ROLLBAR_TOKEN}

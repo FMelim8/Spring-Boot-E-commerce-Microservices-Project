@@ -1,0 +1,126 @@
+service:
+    name: Gameorder
+
+server:
+    error:
+        include-message: always
+    port: <your-port> #Example: 9095
+
+spring:
+    application:
+        name: <your-application-name> #Example: GAME-ORDER-SERVICE
+    #Database Configuration
+    datasource:
+        url: jdbc:<your-database>://${DATABASE_URL:<your-database-hostname>:<your-database-port>}/<your-gameorder-schema> #Example: jdbc:postgresql://${DATABASE_URL:localhost:5432}/orders
+        username: ${DATABASE_USERNAME:<your-db-username>} #Example: ${DATABASE_USERNAME:admin}
+        password: ${DATABASE_PASSWORD:<your-db-password>} #Example: ${DATABASE_PASSWORD:changeme}
+    jpa:
+        hibernate:
+            ddl-auto: update
+        show-sql: true
+        properties:
+            hibernate:
+                format_sql: true
+                dialect: org.hibernate.dialect.<your-database-dialect> #Example: org.hibernate.dialect.PostgreSQLDialect
+    #Enable Circuitbreaker in Openfeign
+    cloud:
+        openfeign:
+            circuitbreaker:
+                enabled: true
+            #Feign timeout Configuration
+            client:
+                config:
+                    default:
+                        connectTimeout: 2000
+                        readTimeout: 5000
+
+    #Kafka connection
+    kafka:
+        bootstrap-servers: ${KAFKA_SERVER_ADDRESS:<your-kafka-url>} #Example ${KAFKA_SERVER_ADDRESS:http://localhost:9092}
+    #Security Configuration
+    security:
+        oauth2:
+            resourceserver:
+                jwt:
+                    issuer-uri: ${JWT_ISSUER_URI:<your-keycloak-url>/realms/microservices-realm} #Example: http://localhost:8080/realms/microservices-realm
+                    jwk-set-uri: ${JWT_ISSUER_URI}/protocol/openid-connect/certs
+
+#Eureka Configuration
+eureka:
+    instance:
+        prefer-ip-address: true
+    client:
+        fetch-registry: true
+        register-with-eureka: true
+        service-url:
+            defaultZone: ${EUREKA_SERVER_ADDRESS:<your-eureka-url>/eureka} #Example: ${EUREKA_SERVER_ADDRESS:http://localhost:8761/eureka}
+
+#JWT Configuration
+jwt:
+    auth:
+        converter:
+            resource-id: keycloak-client
+            principal-attribute: preferred_username
+
+#keycloak
+keycloak:
+    realm: <your-realm-name> #Default: microservices-realm
+    resource: <your-client-name> #Default: keycloak-client
+    auth-server-url: <your-keycloak-url> #Example: http://localhost:8080
+    client:
+        secret: <your-client-secret> #Obtained from Keycloak
+
+    #Services
+    service:
+        name: KEYCLOAK-SERVICE # Has to be the same as the application name given to the Keycloak Service
+
+gamecatalog:
+    service:
+        name: GAME-CATALOG-SERVICE # Has to be the same as the application name given to the Gamecatalog Service
+
+#Actuator Details
+management:
+    endpoint:
+        health:
+            show-details: always
+    health:
+        circuitbreakers:
+            enabled: true
+
+#Resilience4j Configurations
+resilience4j:
+    circuitbreaker:
+        instances:
+            DEFAULT_CIRCUITBREAKER:
+                slidingWindowSize: 10
+                sliding-window-type: count_based
+                failureRateThreshold: 50
+                waitDurationInOpenState: 3000
+                permittedNumberOfCallsInHalfOpenState: 3
+                minimumNumberOfCalls: 4
+                automaticTransitionFromOpenToHalfOpenEnabled: true
+                slow-call-rate-threshold: 50
+                slow-call-duration-threshold: 5000
+                record-exceptions:
+                    - org.springframework.web.client.HttpServerErrorException
+                    - java.io.IOException
+                    - java.sql.SQLTransientConnectionException
+                    - feign.FeignException
+                register-health-indicator: true
+    bulkhead:
+        instances:
+            DEFAULT_BULKHEAD:
+                max-concurrent-calls: 500
+                max-wait-duration: 10000ms
+
+#Logging levels
+logging:
+    level:
+        io.github.resilience4j: INFO
+        org.springframework.cloud.openfeign: INFO
+        org.springframework.cloud.stream: INFO
+        org.apache.kafka: ERROR #Used to mask the Warnings when the Kafka server isn't up. Can be changed to "INFO"
+
+#Rollbar Configuration
+rollbar:
+    accessToken: <your-rollbar-token> #Obtained from Rollbar

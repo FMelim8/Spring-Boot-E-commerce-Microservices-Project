@@ -1,0 +1,105 @@
+{{- range $name, $app := .Values.stack }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+spec:
+  replicas: {{ $app.replicas }}
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+    spec:
+      {{- if $app.initContainers }}
+      initContainers:
+      {{- range $contName, $initContainer := $app.initContainers }}
+        - name: {{ $contName }}
+          image: {{ $initContainer.image }}
+          {{- if $initContainer.volumeMounts }}
+          volumeMounts:
+          {{- range $name, $volume := $initContainer.volumeMounts }}
+            - name: {{ $name }}
+              mountPath: {{ $volume.path }}
+          {{- end }}
+          {{- end }}
+          {{- if $initContainer.command }}
+          command:
+{{ toYaml $initContainer.command | indent 12 }}
+          {{- end }}
+      {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ $app.image }}:{{ $.Values.versions.stack }}
+          {{- if $app.port }}
+          ports:
+            - containerPort: {{ $app.port }}
+          {{- end }}
+          {{- if $app.env }}
+          env:
+            {{- if $app.env }}
+            {{- range $k, $val := $app.env }}
+            - name: {{ $k }}
+              value: {{ $val }}
+            {{- end }}
+            {{- end }}
+          {{- end }}
+          {{- if or ($app.config) ($app.secret) }}
+          envFrom:
+            {{- if $app.config }}
+            {{- range $k, $val := $app.config }}
+            - configMapRef:
+                name: {{ $val }}-config
+            {{- end }}
+            {{- end }}
+            {{- if $app.secret }}
+            {{- range $k, $val := $app.secret}}
+            - secretRef:
+                name: {{ $val }}-secret
+            {{- end }}
+            {{- end }}
+          {{- end }}
+
+          {{- if $app.resources }}
+          resources:
+            requests:
+              memory: {{ $app.resources.requests.memory | quote }}
+              cpu: {{ $app.resources.requests.cpu | quote }}
+            limits:
+              memory: {{ $app.resources.limits.memory | quote }}
+              cpu: {{ $app.resources.limits.cpu | quote }}
+          {{- end }}
+{{- if $app.volumeMounts }}
+          volumeMounts:
+          {{- range $name, $conf := $app.volumeMounts }}
+            - name: {{ $name }}
+              mountPath: {{ $conf.path }}
+              {{- if $conf.subPath }}
+              subPath: {{ $conf.subPath }}
+              {{- end }}
+          {{- end }}
+      volumes:
+      {{- range $name, $path := $app.volumes }}
+      {{- if contains "pv" $path.type }}
+        - name: {{ $name }}
+          persistentVolumeClaim:
+            claimName: {{ $path.name }}-pvc
+      {{- end }}
+      {{- if contains "config" $path.type }}
+        - name: {{ $name }}
+          configMap:
+            name: {{ $path.name }}
+      {{- end }}
+      {{- end }}
+      {{- if $app.emptyDirs }}
+      {{- range $i, $volume := $app.emptyDirs }}
+        - name: {{ $volume }}
+          emptyDir: {}
+      {{- end }}
+      {{- end }}
+{{- end }}
+---
+{{- end }}

@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: generate-certs-job
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    spec:
+      containers:
+        - name: generate-certs
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.18.1
+          command:
+            - bash
+            - -c
+            - |
+              cat > /certs/instances.yml <<EOL
+              instances:
+                - name: elasticsearch
+                  dns:
+                    - elasticsearch
+                  ip:
+                    - 127.0.0.1
+                - name: kibana
+                  dns:
+                    - kibana
+                  ip:
+                    - 127.0.0.1
+                - name: logstash
+                  dns:
+                    - logstash
+                  ip:
+                    - 127.0.0.1
+                - name: filebeat
+                  dns:
+                    - filebeat
+                  ip:
+                    - 127.0.0.1
+              EOL
+
+              elasticsearch-certutil ca --silent --pem --out /certs/ca.zip && \
+              unzip /certs/ca.zip -d /certs && \
+              rm /certs/ca.zip
+
+              elasticsearch-certutil cert --silent --pem \
+                --in /certs/instances.yml \
+                --ca-cert /certs/ca/ca.crt \
+                --ca-key /certs/ca/ca.key \
+                --out /certs/bundle.zip && \
+              unzip /certs/bundle.zip -d /certs && \
+              rm /certs/bundle.zip /certs/instances.yml
+          volumeMounts:
+            - name: certs
+              mountPath: /certs
+      restartPolicy: OnFailure
+      volumes:
+        - name: certs
+          persistentVolumeClaim:
+            claimName: elastic-certs-pvc
