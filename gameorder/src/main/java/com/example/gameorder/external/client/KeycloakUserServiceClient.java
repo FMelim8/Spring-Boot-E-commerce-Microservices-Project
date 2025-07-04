@@ -17,41 +17,41 @@ import java.util.List;
 public interface KeycloakUserServiceClient {
 
     @GetMapping("${keycloak.service.basePath:}/api/userDetails/batch")
-//    @CircuitBreaker(name = "DEFAULT_CIRCUITBREAKER", fallbackMethod = "keycloakListFallback")
-//    @Bulkhead(name = "DEFAULT_BULKHEAD", fallbackMethod = "keycloakListBulkhead")
+   @CircuitBreaker(name = "DEFAULT_CIRCUITBREAKER", fallbackMethod = "keycloakListFallback")
+   @Bulkhead(name = "DEFAULT_BULKHEAD", fallbackMethod = "keycloakListBulkhead")
     ResponseEntity<List<UserRequest>> getUsersByIds(@RequestParam List<Long> userIds);
 
-//    default ResponseEntity<UserRequest> keycloakListFallback(Throwable t){
-//        return new ResponseEntity<>(HttpStatus.SERVICE_UNAVAILABLE);
-//    }
-//
-//   default ResponseEntity<UserRequest> keycloakListBulkhead(Throwable t){
-//       return new ResponseEntity<>(HttpStatus.TOO_MANY_REQUESTS);
-//   }
+   default ResponseEntity<UserRequest> keycloakListFallback(Throwable t){
+       return new ResponseEntity<>(HttpStatus.SERVICE_UNAVAILABLE);
+   }
+
+  default ResponseEntity<UserRequest> keycloakListBulkhead(Throwable t){
+      return new ResponseEntity<>(HttpStatus.TOO_MANY_REQUESTS);
+  }
 
     @GetMapping("${keycloak.service.basePath:}/api/userDetails")
-//    @CircuitBreaker(name = "DEFAULT_CIRCUITBREAKER", fallbackMethod = "keycloakFallback")
-//    @Bulkhead(name = "DEFAULT_BULKHEAD", fallbackMethod = "keycloakBulkhead")
+   @CircuitBreaker(name = "DEFAULT_CIRCUITBREAKER", fallbackMethod = "keycloakFallback")
+   @Bulkhead(name = "DEFAULT_BULKHEAD", fallbackMethod = "keycloakBulkhead")
     ResponseEntity<UserRequest> getCurrentUserInfo();
 
-//    default ResponseEntity<UserRequest> keycloakFallback(Throwable t){
-//        return new ResponseEntity<>(HttpStatus.SERVICE_UNAVAILABLE);
-//    }
-//
-//    default ResponseEntity<UserRequest> keycloakBulkhead(Throwable t){
-//        return new ResponseEntity<>(HttpStatus.TOO_MANY_REQUESTS);
-//    }
+   default ResponseEntity<UserRequest> keycloakFallback(Throwable t){
+       return new ResponseEntity<>(HttpStatus.SERVICE_UNAVAILABLE);
+   }
+
+   default ResponseEntity<UserRequest> keycloakBulkhead(Throwable t){
+       return new ResponseEntity<>(HttpStatus.TOO_MANY_REQUESTS);
+   }
 
     @GetMapping("${keycloak.service.basePath:}/api/userDetails/{id}")
-//    @CircuitBreaker(name = "DEFAULT_CIRCUITBREAKER", fallbackMethod = "keycloakByIdFallback")
-//    @Bulkhead(name = "DEFAULT_BULKHEAD", fallbackMethod = "keycloakByIdBulkhead")
+   @CircuitBreaker(name = "DEFAULT_CIRCUITBREAKER", fallbackMethod = "keycloakByIdFallback")
+   @Bulkhead(name = "DEFAULT_BULKHEAD", fallbackMethod = "keycloakByIdBulkhead")
     ResponseEntity<UserRequest> getUserInfoById(@PathVariable long id);
 
-//    default ResponseEntity<UserRequest> keycloakByIdFallback(Throwable t){
-//        return new ResponseEntity<>(HttpStatus.SERVICE_UNAVAILABLE);
-//    }
-//
-//   default ResponseEntity<UserRequest> keycloakByIdBulkhead(Throwable t){
-//       return new ResponseEntity<>(HttpStatus.TOO_MANY_REQUESTS);
-//   }
+   default ResponseEntity<UserRequest> keycloakByIdFallback(Throwable t){
+       return new ResponseEntity<>(HttpStatus.SERVICE_UNAVAILABLE);
+   }
+
+  default ResponseEntity<UserRequest> keycloakByIdBulkhead(Throwable t){
+      return new ResponseEntity<>(HttpStatus.TOO_MANY_REQUESTS);
+  }
 }
