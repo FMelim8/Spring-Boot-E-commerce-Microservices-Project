@@ -87,5 +87,4 @@ export default function (data) {
     sleep(1);
 }
 
-// word wrap shortcut -> alt + z
-//k6 run orderRequestScript.js
+//k6 run kubeOrderRequestScript.js

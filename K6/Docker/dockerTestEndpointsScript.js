@@ -157,11 +157,12 @@ export default function (data) {
     sleep(1);
 }
 
+//To enable HTML report uncomment the function below 
+
 // export function handleSummary(data) {
 //     return {
-//       "getOrdersSummary.html": htmlReport(data),
+//       "dockerGetOrdersSummary.html": htmlReport(data),
 //     };
 //   }
 
-// word wrap shortcut -> alt + z
-//k6 run test.js
+//k6 run dockerTestEndpointsScript.js
