@@ -401,14 +401,14 @@ jobs:
         echo "creating the kibana-token secret"
         kubectl create secret generic kibana-token-secret \
           --from-literal=ELASTICSEARCH_SERVICE_TOKEN="$token" \
-          --from-literal=KIBANA_SECURITY_ENCRYPTION_KEY="$KEY1" \
-          --from-literal=KIBANA_REPORTING_ENCRYPTION_KEY="$KEY2" \
-          --from-literal=KIBANA_SAVEDOBJECTS_ENCRYPTION_KEY="$KEY3" \
+          --from-literal=XPACK_SECURITY_ENCRYPTIONKEY="$KEY1" \
+          --from-literal=XPACK_REPORTING_ENCRYPTIONKEY="$KEY2" \
+          --from-literal=XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY="$KEY3" \
           --dry-run=client -o yaml | kubectl apply -f - || kubectl delete secret kibana-token-secret && kubectl create secret generic kibana-token-secret \
           --from-literal=ELASTICSEARCH_SERVICE_TOKEN="$token" \
-          --from-literal=KIBANA_SECURITY_ENCRYPTION_KEY="$KEY1" \
-          --from-literal=KIBANA_REPORTING_ENCRYPTION_KEY="$KEY2" \
-          --from-literal=KIBANA_SAVEDOBJECTS_ENCRYPTION_KEY="$KEY3" \
+          --from-literal=XPACK_SECURITY_ENCRYPTIONKEY="$KEY1" \
+          --from-literal=XPACK_REPORTING_ENCRYPTIONKEY="$KEY2" \
+          --from-literal=XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY="$KEY3" \
           --dry-run=client -o yaml | kubectl apply -f -
 
         echo "creating the indices"
